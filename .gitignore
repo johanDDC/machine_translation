@@ -1,0 +1,12 @@
+.ipynb_checkpoints
+.idea
+checkpoints
+wandb
+
+data/results
+data/DeEnItNlRo-DeEnItNlRo
+data/preprocessed
+data/tokenizers
+
+test.py
+main.ipynb
