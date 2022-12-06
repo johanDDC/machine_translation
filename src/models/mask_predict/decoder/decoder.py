@@ -16,6 +16,7 @@ class Decoder(nn.Module):
         self.fft_layers = nn.ModuleList(
             [FFTBlock(d_model, d_inner, n_heads, dropout) for _ in range(n_layers)]
         )
+        self.project_vocab = nn.Linear(d_model, vocab_size, bias=False)
         self.softmax = nn.Softmax(dim=1)
 
     def forward(self, tgt_seq, tgt_pos, kv_encoder, enc_mask=None, tgt_mask=None):
@@ -26,3 +27,5 @@ class Decoder(nn.Module):
                                                                          kv_encoder,
                                                                          enc_mask,
                                                                          tgt_mask)
+        output = self.project_vocab(x)
+        return output
