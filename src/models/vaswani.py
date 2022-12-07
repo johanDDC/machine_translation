@@ -44,19 +44,20 @@ class TranslationModel(nn.Module):
 
     def forward(
             self,
-            src_tokens: Tensor,
+            src_seq: Tensor,
             src_pos: Tensor,
-            tgt_tokens: Tensor,
+            tgt_seq: Tensor,
             tgt_pos: Tensor,
             tgt_mask: Tensor,
             src_padding_mask: Tensor,
             tgt_padding_mask: Tensor,
+            **kwargs
     ):
         """
         Given tokens from a batch of source and target sentences, predict logits for next tokens in target sentences.
         """
-        src_embeded = self.src_embeddings(src_tokens, src_pos)
-        tgt_embeded = self.tgt_embeddings(tgt_tokens, tgt_pos)
+        src_embeded = self.src_embeddings(src_seq, src_pos)
+        tgt_embeded = self.tgt_embeddings(tgt_seq, tgt_pos)
         output = self.transformer(src=src_embeded, tgt=tgt_embeded, src_mask=None, tgt_mask=tgt_mask,
                                   memory_mask=None, src_key_padding_mask=src_padding_mask,
                                   tgt_key_padding_mask=tgt_padding_mask, memory_key_padding_mask=None)

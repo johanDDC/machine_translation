@@ -33,14 +33,14 @@ def train_epoch(
     model.train()
     losses = 0
     for step, batch in enumerate(train_dataloader):
-        src = batch["src"].to(device=DEVICE, dtype=torch.long, non_blocking=True, copy=False)
-        tgt = batch["tgt"].to(device=DEVICE, dtype=torch.long, non_blocking=True, copy=False)
-        src_pos = batch["src_pos"].to(device=DEVICE, dtype=torch.long, non_blocking=True, copy=False)
-        tgt_pos = batch["tgt_pos"].to(device=DEVICE, dtype=torch.long, non_blocking=True, copy=False)
+        device_batch = {}
+        for key in batch.keys():
+            device_batch[key] = batch[key].to(device=DEVICE, dtype=torch.long, non_blocking=True, copy=False)
 
-        tgt_mask, src_padding_mask, tgt_padding_mask = create_mask(src, tgt[:, :-1], DEVICE, PAD_IDX)
+        tgt_mask, src_padding_mask, tgt_padding_mask = create_mask(**device_batch, device=DEVICE, PAD_IDX=PAD_IDX)
 
-        logits = model(src, src_pos, tgt[:, :-1], tgt_pos[:, :-1], tgt_mask, src_padding_mask, tgt_padding_mask)
+        logits = model(**device_batch, tgt_mask=tgt_mask,
+                       src_padding_mask=src_padding_mask, tgt_padding_mask=tgt_padding_mask)
         loss = criterion(logits.reshape(-1, logits.shape[-1]), tgt[:, 1:].reshape(-1))
         loss.backward()
 
@@ -155,8 +155,8 @@ def train_model(data_dir, tokenizer_path, num_epochs):
         val_sentences = [val_dataset.src_tokenizer.decode(val_dataset[i][0]) for i in idx]
         val_targets = [val_dataset.src_tokenizer.decode(val_dataset[i][1]) for i in idx]
         translation = translate(model, val_sentences,
-                               val_dataset.src_tokenizer, val_dataset.tgt_tokenizer,
-                               "greedy", DEVICE)
+                                val_dataset.src_tokenizer, val_dataset.tgt_tokenizer,
+                                "greedy", DEVICE)
         bleu_greedy = BLEU().corpus_score(translation, [val_targets]).score
         text_table.add_data(val_targets[0], translation[0])
         wandb_log = {"train_loss": train_loss, "val_loss": val_loss,

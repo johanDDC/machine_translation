@@ -132,12 +132,10 @@ class TranslationDataset(Dataset):
         src_batch, tgt_batch = [], []
         src_pos = []
         tgt_pos = []
+
         for src, tgt in batch:
             src = torch.tensor([BOS_idx] + src + [EOS_idx])
             tgt = torch.tensor([BOS_idx] + tgt + [EOS_idx])
-
-            # src = pad_sequence(src, batch_first=True, padding_value=PAD_idx)
-            # tgt = pad_sequence(tgt, batch_first=True, padding_value=PAD_idx)
 
             src_pos.append(torch.arange(1, len(src) + 1))
             tgt_pos.append(torch.arange(1, len(tgt) + 1))
@@ -149,7 +147,8 @@ class TranslationDataset(Dataset):
         tgt_pos = pad_sequence(tgt_pos, batch_first=True, padding_value=0)
         src_batch = pad_sequence(src_batch, batch_first=True, padding_value=PAD_idx)
         tgt_batch = pad_sequence(tgt_batch, batch_first=True, padding_value=PAD_idx)
-        return {"src": src_batch, "src_pos": src_pos, "tgt": tgt_batch, "tgt_pos": tgt_pos}
+        return {"src_seq": src_batch, "src_pos": src_pos,
+                "tgt_seq": tgt_batch, "tgt_pos": tgt_pos}
 
 
 class SpecialTokens(Enum):
@@ -157,6 +156,7 @@ class SpecialTokens(Enum):
     PADDING = "[PAD]"
     BEGINNING = "[BOS]"
     END = "[EOS]"
+    MASK = "[MASK]"
 
 
 def train_tokenizers(base_dir: Path, save_dir: Path):
@@ -177,3 +177,24 @@ def train_tokenizers(base_dir: Path, save_dir: Path):
             corpus.extend(f.readlines())
         tokenizer.train_from_iterator(corpus, trainer)
         tokenizer.save(os.path.join(save_dir, f"tokenizer_{language}.json"))
+
+def mask_predict_collator(tokenizer):
+    def collate(batch):
+        PAD_idx = tokenizer.token_to_id(SpecialTokens.PADDING.value)
+        src_batch, tgt_batch = [], []
+        src_pos = []
+        tgt_pos = []
+        for src, tgt in batch:
+            src_pos.append(torch.arange(1, len(src) + 1))
+            tgt_pos.append(torch.arange(1, len(tgt) + 1))
+
+            src_batch.append(torch.tensor(src))
+            tgt_batch.append(torch.tensor(tgt))
+
+        src_pos = pad_sequence(src_pos, batch_first=True, padding_value=0)
+        tgt_pos = pad_sequence(tgt_pos, batch_first=True, padding_value=0)
+        src_batch = pad_sequence(src_batch, batch_first=True, padding_value=PAD_idx)
+        tgt_batch = pad_sequence(tgt_batch, batch_first=True, padding_value=PAD_idx)
+        return {"src": src_batch, "src_pos": src_pos, "tgt": tgt_batch, "tgt_pos": tgt_pos}
+
+    return collate
