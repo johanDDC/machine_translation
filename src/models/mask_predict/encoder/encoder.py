@@ -13,7 +13,7 @@ class Encoder(nn.Module):
         self.n_layers = n_layers
 
         self.src_embeddings = SequenceEmbeddings(vocab_size, src_max_len, d_model)
-        self.len_embeddings = nn.Embedding(tgt_max_len, d_model)
+        self.len_embeddings = nn.Embedding(tgt_max_len + 1, d_model)
         self.dropout = nn.Dropout(dropout)
         self.fft_layers = nn.ModuleList(
             [FFTBlock(d_model, d_inner, n_heads, dropout) for _ in range(n_layers)]
@@ -38,7 +38,6 @@ class Encoder(nn.Module):
             x, _ = self.fft_layers[i](x, local_src_pas_mask)
 
         LEN_predicted = x[:, 0, :] @ self.len_embeddings.weight.T # B x Lt
-        LEN_predicted[:, 0] = -100
 
         x = x[:, 1:, :] # B x Ls X D
 

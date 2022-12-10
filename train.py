@@ -66,7 +66,7 @@ def train_epoch(
             wandb_log = {}
             for key in loss_dict:
                 wandb_log[prefix + key] = loss_dict[key].item()
-            wandb.log(wandb_log)
+            # wandb.log(wandb_log)
 
     return losses / (len(train_dataloader) // cfg.collect_batch)
 
@@ -160,7 +160,8 @@ def define_model(model_type, model_cfg, data_cfg, **kwargs):
                                  n_heads=model_cfg.base_settings.attention_heads,
                                  device=DEVICE, dropout=model_cfg.base_settings.dropout_prob)
         PAD_IDX = kwargs.get("loss_ignore", 1)
-        loss_fn = MaskPredictLoss(ignore_id=PAD_IDX, device=DEVICE)
+        train_data_path = kwargs.get("train_data_path")
+        loss_fn = MaskPredictLoss(ignore_id=PAD_IDX, train_data_path=train_data_path, device=DEVICE)
         collate_fn = kwargs.get("mask_predict_collator")
         collate_fn = collate_fn(kwargs.get("tokenizer"))
         collator = {
@@ -207,7 +208,7 @@ def train_model(data_dir, tokenizer_path, num_epochs, model_type, cfg):
                                             train_collator=train_dataset.collate_translation_data,
                                             val_collator=val_dataset.collate_translation_data,
                                             mask_predict_collator=mask_predict_collator,
-                                            tokenizer=src_tokenizer)
+                                            tokenizer=src_tokenizer, train_data_path=data_dir / "train.en.txt")
     model.to(device)
     print("Number of parameters:", sum(p.numel() for p in model.parameters() if p.requires_grad))
 
@@ -225,7 +226,7 @@ def train_model(data_dir, tokenizer_path, num_epochs, model_type, cfg):
     last_epoch = 1
 
     progress = tqdm(total=total_steps)
-    wandb.watch(model, optimizer, log="all", log_freq=10)
+    # wandb.watch(model, optimizer, log="all", log_freq=10)
     for epoch in range(1, num_epochs + 1):
         train_loss = train_epoch(model, train_dataloader, loss_fn,
                                  optimizer, scheduler, cfg.train, progress, PAD_IDX)
@@ -241,7 +242,7 @@ def train_model(data_dir, tokenizer_path, num_epochs, model_type, cfg):
         bleu_greedy = BLEU().corpus_score(translation, [val_targets]).score
         wandb_log = {"train_loss": train_loss, "BLEU": bleu_greedy}
         wandb_log.update(val_loss_dict)
-        wandb.log(wandb_log)
+        # wandb.log(wandb_log)
 
         # also, save the best checkpoint somewhere around here
         if val_loss_dict["val_loss"] < min_val_loss:
@@ -290,7 +291,7 @@ if __name__ == "__main__":
     elif args.model_type == "mask_predict":
         cfg = MASK_PREDICT_CONFIG
 
-    with wandb.init(project="machine_translation", entity="johan_ddc_team", config=cfg):
-        model = train_model(args.data_dir, args.tokenizer_path, args.num_epochs,
-                            args.model_type, cfg)
+    # with wandb.init(project="machine_translation", entity="johan_ddc_team", config=cfg):
+    model = train_model(args.data_dir, args.tokenizer_path, args.num_epochs,
+                        args.model_type, cfg)
     translate_test_set(model, args.data_dir, "data/results", args.tokenizer_path)

@@ -57,7 +57,7 @@ MASK_PREDICT_CONFIG = {
             "dropout_prob": 0.3
         },
         "optimizer": {
-            "betas": (0.9, 0.98),
+            "betas": (0.9, 0.999),
             "eps": 1e-9,
             "weight_decay": 1e-5,
         },
