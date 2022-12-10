@@ -2,6 +2,8 @@ import torch.nn as nn
 from torch import Tensor
 from torch.nn.init import xavier_normal_, constant_
 
+from src.models.model_utils import SequenceEmbeddings
+
 
 class TranslationModel(nn.Module):
     def __init__(
@@ -63,9 +65,9 @@ class TranslationModel(nn.Module):
                                   tgt_key_padding_mask=tgt_padding_mask, memory_key_padding_mask=None)
         return self.head(output)
 
-    def encode(self, src: Tensor, src_pos:Tensor):
+    def encode(self, src: Tensor, src_pos:Tensor, src_padding_mask: Tensor):
         src_embeded = self.src_embeddings(src, src_pos)
-        return self.transformer.encoder(src=src_embeded)
+        return self.transformer.encoder(src=src_embeded, src_key_padding_mask=src_padding_mask)
 
     def decode(self, tgt: Tensor, tgt_pos:Tensor, memory: Tensor, tgt_mask: Tensor):
         tgt_embeded = self.tgt_embeddings(tgt, tgt_pos)

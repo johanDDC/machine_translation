@@ -30,13 +30,13 @@ def generate_square_subsequent_mask(sz, device="cpu"):
     return mask
 
 
-def create_mask(src, tgt, device="cpu", PAD_IDX=0):
-    tgt_seq_len = tgt.shape[1]
+def create_mask(src_seq, tgt_seq, device="cpu", PAD_IDX=0, **kwargs):
+    tgt_seq_len = tgt_seq.shape[1]
 
     tgt_mask = generate_square_subsequent_mask(tgt_seq_len, device)
 
-    src_padding_mask = (src == PAD_IDX)
-    tgt_padding_mask = (tgt == PAD_IDX)
+    src_padding_mask = (src_seq == PAD_IDX)
+    tgt_padding_mask = (tgt_seq == PAD_IDX)
     return tgt_mask, src_padding_mask, tgt_padding_mask
 
 

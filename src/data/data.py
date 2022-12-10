@@ -181,20 +181,45 @@ def train_tokenizers(base_dir: Path, save_dir: Path):
 def mask_predict_collator(tokenizer):
     def collate(batch):
         PAD_idx = tokenizer.token_to_id(SpecialTokens.PADDING.value)
+        MASK_idx = tokenizer.token_to_id(SpecialTokens.MASK.value)
         src_batch, tgt_batch = [], []
+        tgt_inputs, tgt_unmasked = [], []
         src_pos = []
         tgt_pos = []
+        tgt_lens = []
         for src, tgt in batch:
             src_pos.append(torch.arange(1, len(src) + 1))
             tgt_pos.append(torch.arange(1, len(tgt) + 1))
 
+            if len(tgt) == 1:
+                mask_ids = torch.tensor([0])
+            else:
+                masks_count = torch.randint(low=1, high=len(tgt), size=(1,)).item()
+                start = torch.randint(len(tgt) - masks_count + 1, (1,)).item()
+                mask_ids = torch.arange(start, start + masks_count)
+
             src_batch.append(torch.tensor(src))
             tgt_batch.append(torch.tensor(tgt))
+
+            tgt_masked = tgt_batch[-1].clone()
+            unmasked = torch.full(tgt_masked.shape, fill_value=PAD_idx)
+            unmasked[mask_ids] = tgt_batch[-1][mask_ids]
+            tgt_masked[mask_ids] = MASK_idx
+            tgt_inputs.append(tgt_masked)
+            tgt_unmasked.append(unmasked)
+
+            tgt_lens.append(len(tgt))
 
         src_pos = pad_sequence(src_pos, batch_first=True, padding_value=0)
         tgt_pos = pad_sequence(tgt_pos, batch_first=True, padding_value=0)
         src_batch = pad_sequence(src_batch, batch_first=True, padding_value=PAD_idx)
         tgt_batch = pad_sequence(tgt_batch, batch_first=True, padding_value=PAD_idx)
-        return {"src": src_batch, "src_pos": src_pos, "tgt": tgt_batch, "tgt_pos": tgt_pos}
+        tgt_inputs = pad_sequence(tgt_inputs, batch_first=True, padding_value=PAD_idx)
+        tgt_unmasked = pad_sequence(tgt_unmasked, batch_first=True, padding_value=PAD_idx)
+        tgt_lens = torch.tensor(tgt_lens, dtype=torch.long)
+        return {"src_seq": src_batch, "src_pos": src_pos,
+                "tgt_seq": tgt_batch, "tgt_pos": tgt_pos,
+                "tgt_input": tgt_inputs, "tgt_lens": tgt_lens,
+                "tgt_unmasked": tgt_unmasked}
 
     return collate

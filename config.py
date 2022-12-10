@@ -8,8 +8,8 @@ _BASE_CONFIG = {
         "log_step": 300
     },
     "data": {
-        "batch_size_train": 64,
-        "batch_size_val": 64,
+        "batch_size_train": 96,
+        "batch_size_val": 96,
         "dataloader_num_workers": 8,
         "max_len": 128
     },
@@ -44,4 +44,31 @@ VASWANI_CONFIG = {
     },
 }
 
+MASK_PREDICT_CONFIG = {
+    **_BASE_CONFIG,
+    "model": {
+        "base_settings": {
+            "vocab_size": 30_000,
+            "num_encoder_layers": 6,
+            "num_decoder_layers": 6,
+            "emb_size": 256,
+            "dim_feedforward": 512,
+            "attention_heads": 4,
+            "dropout_prob": 0.3
+        },
+        "optimizer": {
+            "betas": (0.9, 0.98),
+            "eps": 1e-9,
+            "weight_decay": 1e-5,
+        },
+        "scheduler": {
+            "max_lr": 5e-4,
+            "div_factor": 10_000,
+            "pct_start": 0.05, # warmup 10k steps
+            "anneal_strategy": "cos"
+        }
+    },
+}
+
 VASWANI_CONFIG = Dict(VASWANI_CONFIG)
+MASK_PREDICT_CONFIG = Dict(MASK_PREDICT_CONFIG)

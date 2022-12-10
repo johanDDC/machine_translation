@@ -3,17 +3,7 @@ from torch import nn
 from torch import Tensor
 
 from src.models.mask_predict.encoder.fft_block import FFTBlock
-
-
-class SequenceEmbeddings(nn.Module):
-    def __init__(self, vocab_size: int, seq_max_len: int, emb_size: int):
-        super().__init__()
-        n_positions = seq_max_len + 1
-        self.embeddings = nn.Embedding(vocab_size, emb_size)
-        self.pos_embeddings = nn.Embedding(n_positions, emb_size)
-
-    def forward(self, seq: Tensor, seq_pos: Tensor):
-        return self.embeddings(seq) + self.pos_embeddings(seq_pos)
+from src.models.model_utils import SequenceEmbeddings
 
 
 class Encoder(nn.Module):
@@ -24,26 +14,32 @@ class Encoder(nn.Module):
 
         self.src_embeddings = SequenceEmbeddings(vocab_size, src_max_len, d_model)
         self.len_embeddings = nn.Embedding(tgt_max_len, d_model)
+        self.dropout = nn.Dropout(dropout)
         self.fft_layers = nn.ModuleList(
             [FFTBlock(d_model, d_inner, n_heads, dropout) for _ in range(n_layers)]
         )
-        self.softmax = nn.Softmax(dim=1)
 
-    def forward(self, src_seq, src_pos, src_mask=None):
+    def forward(self, src_seq, src_pos, src_pad_mask=None):
         x = self.src_embeddings(src_seq, src_pos) # B x Ls x D
-        LEN_tokens = torch.zeros((x.shape[0], 1), device=x.device) # B x 1
+        LEN_tokens = torch.zeros((x.shape[0], 1), device=x.device, dtype=torch.long) # B x 1
         LEN_tokens = self.len_embeddings(LEN_tokens) # B x D
         x = torch.cat([LEN_tokens, x], dim=1) # B x (Ls + 1) x D
+        x = self.dropout(x)
 
-        src_mask = torch.cat([torch.zeros((x.shape[0], 1), device=x.device),
-                              src_mask], dim=1) # B x (Ls + 1)
+
+        if src_pad_mask is not None:
+            local_src_pas_mask = torch.cat([torch.zeros((x.shape[0], 1), device=x.device),
+                                      src_pad_mask], dim=1) # B x (Ls + 1)
+        else:
+            local_src_pas_mask = None
 
 
         for i in range(self.n_layers):
-            x, _ = self.fft_layers[i](x, src_mask)
+            x, _ = self.fft_layers[i](x, local_src_pas_mask)
 
         LEN_predicted = x[:, 0, :] @ self.len_embeddings.weight.T # B x Lt
-        LEN_predicted[:, 0] = -torch.inf
-        LEN_predicted = self.softmax(LEN_predicted)
+        LEN_predicted[:, 0] = -100
 
-        return x, LEN_predicted, src_mask
+        x = x[:, 1:, :] # B x Ls X D
+
+        return x, LEN_predicted
