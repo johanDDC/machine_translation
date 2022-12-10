@@ -233,13 +233,16 @@ def train_model(data_dir, tokenizer_path, num_epochs, model_type, cfg):
         val_loss_dict = evaluate(model, val_dataloader, loss_fn, cfg.train, PAD_IDX)
 
         # might be useful to translate some sentences from validation to check your decoding implementation
-        idx = torch.randint(0, len(val_dataset), (10,))
-        val_sentences = [val_dataset.src_tokenizer.decode(val_dataset[i][0]) for i in idx]
-        val_targets = [val_dataset.tgt_tokenizer.decode(val_dataset[i][1]) for i in idx]
-        translation = translate(model, val_sentences,
-                                val_dataset.src_tokenizer, val_dataset.tgt_tokenizer,
-                                "mask_predict", DEVICE, data_cfg)
-        bleu_greedy = BLEU().corpus_score(translation, [val_targets]).score
+        try:
+            idx = torch.randint(0, len(val_dataset), (10,))
+            val_sentences = [val_dataset.src_tokenizer.decode(val_dataset[i][0]) for i in idx]
+            val_targets = [val_dataset.tgt_tokenizer.decode(val_dataset[i][1]) for i in idx]
+            translation = translate(model, val_sentences,
+                                    val_dataset.src_tokenizer, val_dataset.tgt_tokenizer,
+                                    "mask_predict", DEVICE, data_cfg)
+            bleu_greedy = BLEU().corpus_score(translation, [val_targets]).score
+        except:
+            bleu_greedy = 0
         wandb_log = {"train_loss": train_loss, "BLEU": bleu_greedy}
         wandb_log.update(val_loss_dict)
         # wandb.log(wandb_log)
