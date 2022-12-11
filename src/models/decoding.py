@@ -23,8 +23,39 @@ def _batch_greedy_decode(
         model: TranslationModel,
         src: torch.Tensor,
         src_pos: torch.Tensor,
-        mask_predict
-        src_pad_mask: torch.Tensor,
+        src_pad_mask,
+        max_len: int,
+        tgt_tokenizer: Tokenizer,
+        device: torch.device,
+) -> torch.Tensor:
+    """
+    Given a batch of source sequences, predict its translations with greedy search.
+    The decoding procedure terminates once either max_len steps have passed
+    or the "end of sequence" token has been reached for all sentences in the batch.
+    :param model: the model to use for translation
+    :param src: a (batch, time) tensor of source sentence tokens
+    :param max_len: the maximum length of predictions
+    :param tgt_tokenizer: target language tokenizer
+    :param device: device that the model runs on
+    :return: a (batch, time) tensor with predictions
+    """
+    memory = model.encode(src, src_pos, src_pad_mask)
+    y = torch.full((src.shape[0], 1), src[0, 0], dtype=torch.long, device=device)
+    y_pos = torch.ones_like(y, dtype=torch.long, device=device)
+    for i in range(1, max_len):
+        y_mask = generate_square_subsequent_mask(y.shape[1], device=device).bool()
+        out = model.decode(y, y_pos, memory, y_mask)
+        probs = model.head(out[:, -1, :])
+        next_tokens = probs.argmax(1).view(-1, 1)
+        y = torch.cat([y, next_tokens], dim=1)
+    return y
+
+
+def _greedy_decode(
+        model: TranslationModel,
+        src: torch.Tensor,
+        src_pos: torch.Tensor,
+        src_pad_mask,
         max_len: int,
         tgt_tokenizer: Tokenizer,
         device: torch.device,
@@ -41,21 +72,25 @@ def _batch_greedy_decode(
     :return: a (batch, time) tensor with predictions
     """
     EOS_IDX = tgt_tokenizer.token_to_id(SpecialTokens.END.value)
-    BOS_IDX = tgt_tokenizer.token_to_id(SpecialTokens.BEGINNING.value)
-    memory = model.encode(src, src_pos, src_pad_mask)
-    y = torch.full((src.shape[0], 1), fill_value=BOS_IDX, device=device)
-    y_pos = torch.zeros((src.shape[0], max_len), device=device)
-    for i in range(max_len - 1):
-        y_mask = generate_square_subsequent_mask(y.shape[1], device=device).bool()
-        y_pos[:, i] = i + 1
-        out = model.decode(y, torch.tensor(y_pos, dtype=torch.long, device=device).view(y.shape), memory, y_mask)
-        probs = model.head(out[-1])
-        next_word = probs.argmax().item()
-        if next_word == EOS_IDX:
-            break
-        y = torch.cat([y,
-                       torch.tensor(next_word, dtype=torch.long, device=device).view(1)])
-    return y
+    PAD_idx = tgt_tokenizer.token_to_id(SpecialTokens.PADDING.value)
+    res = torch.full((src.shape[0], max_len), PAD_idx, dtype=torch.long, device=device)
+    for i in range(src.shape[0]):
+        memory = model.encode(src[i], src_pos[i], src_pad_mask[i])
+        y = torch.tensor(src[0, 0].item(), dtype=torch.long, device=device).view(1)
+        y_pos = []
+        for j in range(max_len - 1):
+            y_mask = generate_square_subsequent_mask(y.shape[0], device=device).bool()
+            y_pos.append(j + 1)
+            out = model.decode(y, torch.tensor(y_pos, dtype=torch.long, device=device).view(y.shape), memory, y_mask)
+            probs = model.head(out[-1])
+            next_word = probs.argmax().item()
+            if next_word == EOS_IDX:
+                break
+            y = torch.cat([y,
+                           torch.tensor(next_word, dtype=torch.long, device=device).view(1)])
+        res[i, :len(y)] = y
+    return res
+
 
 
 def _mask_predict_decode(
