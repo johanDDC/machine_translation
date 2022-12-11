@@ -2,15 +2,7 @@ import torch.nn as nn
 from torch import Tensor
 from torch.nn.init import xavier_normal_, constant_
 
-
-class SequenceEmbeddings(nn.Module):
-    def __init__(self, vocab_size: int, n_positions: int, emb_size: int):
-        super().__init__()
-        self.embeddings = nn.Embedding(vocab_size, emb_size)
-        self.pos_embeddings = nn.Embedding(n_positions, emb_size, padding_idx=0)
-
-    def forward(self, seq: Tensor, seq_pos: Tensor):
-        return self.embeddings(seq) + self.pos_embeddings(seq_pos)
+from src.models.model_utils import SequenceEmbeddings
 
 
 class TranslationModel(nn.Module):
@@ -54,27 +46,28 @@ class TranslationModel(nn.Module):
 
     def forward(
             self,
-            src_tokens: Tensor,
+            src_seq: Tensor,
             src_pos: Tensor,
-            tgt_tokens: Tensor,
+            tgt_seq: Tensor,
             tgt_pos: Tensor,
             tgt_mask: Tensor,
             src_padding_mask: Tensor,
             tgt_padding_mask: Tensor,
+            **kwargs
     ):
         """
         Given tokens from a batch of source and target sentences, predict logits for next tokens in target sentences.
         """
-        src_embeded = self.src_embeddings(src_tokens, src_pos)
-        tgt_embeded = self.tgt_embeddings(tgt_tokens, tgt_pos)
+        src_embeded = self.src_embeddings(src_seq, src_pos)
+        tgt_embeded = self.tgt_embeddings(tgt_seq, tgt_pos)
         output = self.transformer(src=src_embeded, tgt=tgt_embeded, src_mask=None, tgt_mask=tgt_mask,
                                   memory_mask=None, src_key_padding_mask=src_padding_mask,
                                   tgt_key_padding_mask=tgt_padding_mask, memory_key_padding_mask=None)
         return self.head(output)
 
-    def encode(self, src: Tensor, src_pos:Tensor):
+    def encode(self, src: Tensor, src_pos:Tensor, src_padding_mask: Tensor):
         src_embeded = self.src_embeddings(src, src_pos)
-        return self.transformer.encoder(src=src_embeded)
+        return self.transformer.encoder(src=src_embeded, src_key_padding_mask=src_padding_mask)
 
     def decode(self, tgt: Tensor, tgt_pos:Tensor, memory: Tensor, tgt_mask: Tensor):
         tgt_embeded = self.tgt_embeddings(tgt, tgt_pos)
