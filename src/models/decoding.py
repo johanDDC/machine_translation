@@ -84,10 +84,10 @@ def _greedy_decode(
             out = model.decode(y, torch.tensor(y_pos, dtype=torch.long, device=device).view(y.shape), memory, y_mask)
             probs = model.head(out[-1])
             next_word = probs.argmax().item()
+            y = torch.cat([y, torch.tensor(next_word, dtype=torch.long, device=device).view(1)])
             if next_word == EOS_IDX:
                 break
-            y = torch.cat([y,
-                           torch.tensor(next_word, dtype=torch.long, device=device).view(1)])
+
         res[i, :len(y)] = y
     return res
 

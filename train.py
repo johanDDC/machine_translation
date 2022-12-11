@@ -44,7 +44,7 @@ def train_epoch(
         tgt_mask, src_padding_mask, tgt_padding_mask = create_mask(**device_batch, device=DEVICE, PAD_IDX=PAD_IDX)
 
         model_output = model(**device_batch, tgt_mask=tgt_mask,
-                       src_padding_mask=src_padding_mask, tgt_padding_mask=tgt_padding_mask)
+                             src_padding_mask=src_padding_mask, tgt_padding_mask=tgt_padding_mask)
         loss_dict = criterion(model_output, device_batch)
         loss = loss_dict["loss"]
         # print(loss.item(), loss_dict["len_loss"], loss_dict["translate_loss"])
@@ -66,7 +66,7 @@ def train_epoch(
             wandb_log = {}
             for key in loss_dict:
                 wandb_log[prefix + key] = loss_dict[key].item()
-            # wandb.log(wandb_log)
+            wandb.log(wandb_log)
 
     return losses / (len(train_dataloader) // cfg.collect_batch)
 
@@ -114,8 +114,9 @@ def translate_test_set(model: TranslationModel, data_dir, output_dir, tokenizer_
     with open(data_dir / "test.de.txt") as input_file, open(
             "answers_beam.txt", "w+"
     ) as output_file:
-        # translate with beam search
-        pass
+        test_sentences = input_file.readlines()
+        beam_translations = translate(model, test_sentences, src_tokenizer, tgt_tokenizer, "beam_batched", DEVICE, data_cfg)
+        output_file.writelines(greedy_translations)
 
     with open(data_dir / "test.en.txt") as input_file:
         references = [line.strip() for line in input_file]
@@ -226,7 +227,7 @@ def train_model(data_dir, tokenizer_path, num_epochs, model_type, cfg):
     last_epoch = 1
 
     progress = tqdm(total=total_steps)
-    # wandb.watch(model, optimizer, log="all", log_freq=10)
+    wandb.watch(model, optimizer, log="all", log_freq=10)
     for epoch in range(1, num_epochs + 1):
         train_loss = train_epoch(model, train_dataloader, loss_fn,
                                  optimizer, scheduler, cfg.train, progress, PAD_IDX)
@@ -239,15 +240,15 @@ def train_model(data_dir, tokenizer_path, num_epochs, model_type, cfg):
             val_targets = [val_dataset.tgt_tokenizer.decode(val_dataset[i][1]) for i in idx]
             translation = translate(model, val_sentences,
                                     val_dataset.src_tokenizer, val_dataset.tgt_tokenizer,
-                                    "mask_predict", DEVICE, data_cfg)
+                                    "greedy", DEVICE, data_cfg)
             bleu_greedy = BLEU().corpus_score(translation, [val_targets]).score
         except:
             bleu_greedy = 0
         wandb_log = {"train_loss": train_loss, "BLEU": bleu_greedy}
         wandb_log.update(val_loss_dict)
-        # wandb.log(wandb_log)
+        wandb.log(wandb_log)
 
-        # also, save the best checkpoint somewhere around here
+        # # also, save the best checkpoint somewhere around here
         if val_loss_dict["val_loss"] < min_val_loss:
             os.makedirs(cfg.misc.checkpoint_path, exist_ok=True)
             torch.save({"model": model.state_dict(),
@@ -282,7 +283,7 @@ if __name__ == "__main__":
     # argument groups are useful for separating semantically different parameters
     hparams_group = parser.add_argument_group("Training hyperparameters")
     hparams_group.add_argument(
-        "--num-epochs", type=int, default=93, help="Number of training epochs"
+        "--num-epochs", type=int, default=20, help="Number of training epochs"
     )
     hparams_group.add_argument(
         "--model-type", type=str, default="vaswani", help="Model architecture to train"
@@ -294,7 +295,7 @@ if __name__ == "__main__":
     elif args.model_type == "mask_predict":
         cfg = MASK_PREDICT_CONFIG
 
-    # with wandb.init(project="machine_translation", entity="johan_ddc_team", config=cfg):
-    model = train_model(args.data_dir, args.tokenizer_path, args.num_epochs,
+    with wandb.init(project="machine_translation", entity="johan_ddc_team", config=cfg):
+        model = train_model(args.data_dir, args.tokenizer_path, args.num_epochs,
                         args.model_type, cfg)
     translate_test_set(model, args.data_dir, "data/results", args.tokenizer_path)
