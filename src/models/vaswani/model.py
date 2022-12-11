@@ -58,11 +58,17 @@ class TranslationModel(nn.Module):
         """
         Given tokens from a batch of source and target sentences, predict logits for next tokens in target sentences.
         """
+        local_tgt_seq = tgt_seq[:, :-1]
+        local_tgt_pos = tgt_pos[:, :-1]
+        tgt_len = local_tgt_seq.shape[1]
+        local_tgt_padding = tgt_padding_mask[:, :tgt_len]
+        local_tgt_mask = tgt_mask[:tgt_len, :tgt_len]
+
         src_embeded = self.src_embeddings(src_seq, src_pos)
-        tgt_embeded = self.tgt_embeddings(tgt_seq, tgt_pos)
-        output = self.transformer(src=src_embeded, tgt=tgt_embeded, src_mask=None, tgt_mask=tgt_mask,
+        tgt_embeded = self.tgt_embeddings(local_tgt_seq, local_tgt_pos)
+        output = self.transformer(src=src_embeded, tgt=tgt_embeded, src_mask=None, tgt_mask=local_tgt_mask,
                                   memory_mask=None, src_key_padding_mask=src_padding_mask,
-                                  tgt_key_padding_mask=tgt_padding_mask, memory_key_padding_mask=None)
+                                  tgt_key_padding_mask=local_tgt_padding, memory_key_padding_mask=None)
         return self.head(output)
 
     def encode(self, src: Tensor, src_pos:Tensor, src_padding_mask: Tensor):
